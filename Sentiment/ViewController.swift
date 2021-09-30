@@ -7,6 +7,8 @@ The root view controller that provides a button to start and stop recording, and
 
 import UIKit
 import Speech
+import NaturalLanguage
+import CoreML
 
 public class ViewController: UIViewController, SFSpeechRecognizerDelegate {
     // MARK: Properties
@@ -19,9 +21,13 @@ public class ViewController: UIViewController, SFSpeechRecognizerDelegate {
     
     private let audioEngine = AVAudioEngine()
     
+    var isUserSpoke:Bool = false
+    
     @IBOutlet var textView: UITextView!
     
     @IBOutlet var recordButton: UIButton!
+    
+    @IBOutlet var resultLabel: UILabel!
     
     // MARK: View Controller Lifecycle
     
@@ -86,7 +92,7 @@ public class ViewController: UIViewController, SFSpeechRecognizerDelegate {
         
         // Keep speech recognition data on device
         if #available(iOS 13, *) {
-            recognitionRequest.requiresOnDeviceRecognition = false
+            recognitionRequest.requiresOnDeviceRecognition = true
         }
         
         // Create a recognition task for the speech recognition session.
@@ -98,7 +104,8 @@ public class ViewController: UIViewController, SFSpeechRecognizerDelegate {
                 // Update the text view with the results.
                 self.textView.text = result.bestTranscription.formattedString
                 isFinal = result.isFinal
-                print("Text \(result.bestTranscription.formattedString)")
+                self.isUserSpoke = result.bestTranscription.formattedString != ""
+                //print("Text \(result.bestTranscription.formattedString)")
             }
             
             if error != nil || isFinal {
@@ -127,6 +134,22 @@ public class ViewController: UIViewController, SFSpeechRecognizerDelegate {
         textView.text = "(Go ahead, I'm listening)"
     }
     
+    public func GetSent(result: Any?) {
+        let model = Emo_classi()
+        do {
+            let Sent_Result = try model.prediction(text: result as! String)
+            
+            if Sent_Result.label == "1" { resultLabel.text = "Positive" }
+            else if Sent_Result.label == "0" { resultLabel.text = "Neutral" }
+            else { resultLabel.text = "Negative" }
+            textView.frame.size = textView.intrinsicContentSize
+        }
+        
+        catch {
+            print("MLError")
+        }
+    }
+    
     // MARK: SFSpeechRecognizerDelegate
     
     public func speechRecognizer(_ speechRecognizer: SFSpeechRecognizer, availabilityDidChange available: Bool) {
@@ -147,8 +170,13 @@ public class ViewController: UIViewController, SFSpeechRecognizerDelegate {
             recognitionRequest?.endAudio()
             recordButton.isEnabled = false
             recordButton.setTitle("Stopping", for: .disabled)
+            if isUserSpoke {
+                GetSent(result: textView.text)
+            }
         } else {
             do {
+                isUserSpoke = false
+                resultLabel.text = ""
                 try startRecording()
                 recordButton.setTitle("Stop Recording", for: [])
             } catch {
